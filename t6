@@ -1,0 +1,283 @@
+---
+title: "Taller 6 - Series de Tiempo & Evaluación de impacto"
+author: "Juan Carlos González y Juan Nicolas Alvarez"
+date: "16 de mayo de 2019"
+output: 
+    pdf_document:
+      keep_tex: true
+      includes:
+          in_header: header.tex
+geometry: margin=0.7in
+fontsize: 10pt
+encoding: UFT-8
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Parte 1: Series de Tiempo
+
+##1.Defina en sus palabras los siguientes términos:
+	
+### Estacionalidad:
+Es un fenómeno que ocurre cada cierto determinado periodo de tiempo, hace que los datos sean at?picos en comparaci?n a la media sin tendencia de los dem?s datos. Para solucionar estacionalidad, se crean dummies con valor = 1, en los periodos estacionales y se regresa contra la dummie de la siguiente manera: 
+
+$$y_t=β_0+β_1 (\tilde x_1)_t+ β_2 (\tilde x_2)_t+ δ1 (dummie de la estacionalidad)+Ut$$
+
+### Estacionariedad:
+Es un proceso que permite analizar económicamente una serie de tiempo sin influencia de datos atípicos producto de procesos estacionales. El proceso estacionario estocástico hace que toda $x_t$ tiene la misma distribución en cuanto a media y varianza, se realiza a través del modelo clásico de descomposición o el modelo de Box y Jenkins para diferenciar los datos.
+
+En el proceso clásico de descomposición, está conformado en tres partes: 
+
+* tendencia $(\mu_t)$, $y_t = β_0 + β_1 (\tilde x_1)_t + β_1 (\tilde x_2)_t + \epsilon_t$
+* estacionalidad $(S_t)$, $y_t= β_0 + β_1(\tilde x_1)_t + β_2 (\tilde x_2)_t + δ1 (dummie de la estacionalidad) +U_t$
+* componente irregular $(I_t)$, $y_t = ρy_t−1+U_t$
+
+Para el proceso de Box y Jenkins se realizan transformaciones en la tendencia y estacionalidad, removiendo estos patrones removiendo la variaci?n periodo a periodo. La ultima se usa más en análisis macroeconómico mientras que la primera en modelos microeconómicos.
+
+
+##2. Usando los datos en el archivo csv adjunto realice lo siguiente:
+```{r }
+  getwd()
+  US_UK <- read.csv("D:/Descargas/JCG/data/US_UK.csv", sep = ";")
+  View(US_UK)
+```
+###a) Gr?fique los datos
+    
+```{r }
+  plot(US_UK$U.K..Pound.Sterling)
+```
+  
+###b) ¿Debe hacer alguna modificación a la variable? ?por qué?
+
+Si se debe hacer una modicficación a la base, dado que es una serie de tiempo y R no la reconoce como tal si no se parametriza.
+    
+```{r }
+  ts <- ts(US_UK$U.K..Pound.Sterling, start = c(1995,3,1), end = c(2018,5,2), frequency = 252)
+  plot(ts,
+       main = "Tasa de Cambio US-UK",
+       ylab = "US/UK",
+       xlab = "Tiempo")
+```
+
+###c) Presente el gráfico de autocorrelación.
+    
+```{r forecast, results='hide', message=FALSE, warning=FALSE}  
+  library(forecast)
+  library(stargazer)
+```
+
+```{r}
+  Acf(ts, plot= T, lag.max = 1400, main="Autocorrelograma")
+  dif <- diff(ts, lag = 1, differences = 1)
+  Acf(dif)
+  #Se diferencia una vez, con un lag, de tal forma que podemos encontrar una serie m?s estacionaria
+```
+
+###d) Proponga un modelo de regresión sencillo, escriba la ecuación.
+    
+```{r AR, results='hide', message=FALSE, warning=FALSE}
+  library(lmtest)
+```
+El modelo de regresión mas sencillo sería un AR(1), adicionalemnte se proponen otros dos modelos con los siguientes resultados:
+```{r }
+  reg1 <- Arima(ts(US_UK$U.K..Pound.Sterling), order = c(1,0,0))
+  reg2 <- Arima(ts(US_UK$U.K..Pound.Sterling), order = c(1,1,0))
+  reg3 <- Arima(ts(US_UK$U.K..Pound.Sterling), order = c(2,0,0))
+  stargazer(coeftest(reg1), coeftest(reg2), coeftest(reg3), type = "text")
+```
+
+###e) Estime un modelo AR1 y AR2, presente los resultados en una tabla.
+    
+```{r}
+  regAR1 <- Arima(ts(US_UK$U.K..Pound.Sterling), order = c(1,0,0))
+  regAR2 <- Arima(ts(US_UK$U.K..Pound.Sterling), order = c(2,0,0))
+
+  stargazer(coeftest(regAR1),coeftest(regAR2), type = "text")
+```
+
+###f ) BONO: Relice una predición del siguiente valor de la serie.
+    
+```{r }
+  ts2 <- ts(US_UK$U.K..Pound.Sterling, start = c(2017,3,1), end = c(2018,5,2), frequency = 252)
+  plot(ts2, 
+       main = "Tasa de Cambio US-UK",
+       ylab = "US/UK",
+       xlab = "Tiempo")
+```
+Se realiza el gráfico de Autocorrelación, en el que se evidencia que es una serie no estacionaria.
+```{r}
+  Acf(ts2)
+```
+Por lo cual se realiza diferenciación sobre la muestra.
+```{r}
+  dif2 <- diff(ts2, lag = 1, differences = 1)
+  Acf(dif2) #Es una serie estacionaria
+  
+  fit <- Arima(ts2, order = c(30,1,0))
+  fit
+```
+Finalmente, se presenta el gráfico de predicción de la tasa de cambio entre la libra esterlina y el dolar americano para 30 periodos.
+```{r}
+  predicted <- forecast(fit, h=30)
+  plot(predicted, main = "Prediccion Tasa de Cambio US-UK",
+       ylab = "US-UK",
+       xlab = "Tiempo")
+```
+  
+
+# Parte 2: Evaluacion de impacto
+
+##1.	Describa el problema fundamental de la Inferencia Causal.
+
+La Inferencia causal es el proceso de determinar si la estimación de una variable denota causalidad, existen dos problemas los cuales pueden provenir de un incumplimiento del supuesto "exogeneidad estrica", el primero se denomina sesgo de selección, donde se observa una submuestra particular  de la población, lo que se refleja en el sesgo por variable omitida, el segundo problema se denomina doble causalidad, el cual hace referencia a la información con que contamos, donde no se sabe cuál variable está causando cambios en cuál.
+
+###2.	Defina el Average Treatment Effect.
+
+Es una medida utilizada para comparar tratamientos en experimentos aleatorios. El ATE mide la diferencia en los resultados medios entre las unidades asignadas al tratamiento y las unidades asignadas al control, sin embargo, el ATE se entiende generalmente como un parámetro causal que un investigador desea conocer.
+Adjunto encontrará un archivo xlsx que contiene información sobre la expansión que se realizá al Earned Income Tax Credit en 1993. Esto se trató de una legislación destinada a proporcionar una exención de impuestos para personas de bajos recursos. Esta base contiene información para mujeres solteras en la cual se quiere ver el efecto que tuvo el EITC sobre el empleo femenino (Labor Force).
+
+##3. Adjunto encontrar? un archivo xlsx que contiene información sobre la expansión que se realizá al Earned Income Tax Credit en 1993. Esto se tratá de una legislación destinada a proporcionar una exención de impuestos para personas de bajos recursos. Esta base contiene información para mujeres solteras en la cual se quiere ver el efecto que tuvo el EITC sobre el empleo femenino (Labor Force).
+
+```{r, results='hide', message=FALSE, warning=FALSE }
+  library(haven)
+```
+
+```{r}
+  eitc <- read_dta("D:/Descargas/JCG/data/eitc.dta")
+  View(eitc)
+```
+
+###a) Proporcione estadísticas básicas de las variables.
+
+```{r pastecs, results='hide', message=FALSE, warning=FALSE }
+  library(pastecs)
+```
+
+```{r tab1}
+  table(eitc$year)
+  stat.desc(eitc[,c(3,4,6,7,8,9,11)], options(digits = 2)) 
+```
+  
+###b) Calcule las medias simples para todas las variables para:
+
+####1) Mujeres solteras sin hijos.
+
+```{r }
+  no_hijos <- subset.data.frame(eitc, subset = eitc$children==0)
+  stat.desc(no_hijos[,c(3,4,6,7,8,9,11)], options(digits = 2))
+```
+
+####2) Mujeres solteras con 1 hijo.
+
+```{r }
+  un_hijo <- subset.data.frame(eitc, subset = eitc$children==1)
+  stat.desc(un_hijo[,c(3,4,6,7,8,9,11)], options(digits = 2))
+```
+
+####3) Mujeres solteras con 2 hijos o m?s.
+
+```{r }
+  dos_hijos <- subset.data.frame(eitc, subset = eitc$children==2)
+  stat.desc(dos_hijos[,c(3,4,6,7,8,9,11)], options(digits = 2))
+```
+
+###c) Se definió el grupo tratamiento como aquellas mujeres con hijos, y el grupo control como aquellas mujeres sin hijos. Construya la variable de Tratamiento y la variable Post.
+
+```{r }
+  eitc2 <- eitc
+  eitc2$children[eitc2$children>0] <- 1
+  View(eitc2)
+  
+  control<- subset.data.frame(eitc2, subset = eitc2$children==0)
+  tratamiento<- subset.data.frame(eitc2, subset = eitc2$children==1)
+```
+
+###d) Realice un gráfico donde se evidencie el promedio anual de la fuerza laboral (work) para cada año desde 1991 hasta 1996 tanto para el grupo tratmiento como el grupo control. ¿Qué supuesto se debería cumplir? ¿Se cumple? Justifique. Bono: Adicione una línea vertical en el año de expansión del EITC.
+
+El supuesto que debería cumplir es el de **Tendencias paralelas**, hasta el año del tratamiento, despues de este, debería mostrar el efecto del mismo. Junto con esto, se evidencia que tiene tendencias paralelas antes del tratamiento, lo que cumple el supuesto.
+```{r }
+  
+  years=c(1991:1996)
+  trats <- list(control,tratamiento)
+  
+  total <- list()
+  for (j in 1:length(years)){
+    y=subset(control, control$year==years[j])
+    total[[j]]<-y
+  }
+```
+
+```{r}
+  total_ <- list()
+  for (j in 1:length(years)){
+    y=subset(tratamiento, tratamiento$year==years[j])
+    total_[[j]]<-y
+  }
+```
+
+```{r}
+  media_wcont <- vector(,length=6)
+  for (i in 1:length(total)){
+    media_wcont[i]= mean(total[[i]]$work)
+  }
+  #----------
+  media_wtrat <- vector(,length=6)
+  for (i in 1:length(total_)){
+    media_wtrat[i]= mean(total_[[i]]$work)
+  }
+  #----------
+  media_tot <- data.frame("year"=c(1991:1996),media_wcont,media_wtrat)
+  media_tot$media_wcont <- media_tot$media_wcont*100
+  media_tot$media_wtrat <- media_tot$media_wtrat*100 
+  media_tot
+  #-----------
+```
+
+```{r ggplt, results='hide', message=FALSE, warning=FALSE}
+  library(ggplot2)
+```
+
+```{r}
+  ggplot(media_tot, aes(year)) + 
+    geom_line(aes(y = media_wcont, colour = "red")) + 
+    geom_line(aes(y = media_wtrat, colour = "blue"))+
+    geom_vline(xintercept = 1994)+
+    ggtitle("Media del trabajo")+
+    xlab("tiempo") + ylab("media")
+```
+
+###e) Escriba el modelo a estimar.
+  
+El modelo a estimar es un Dif&Dif, en el que se interactua el tener hijos con estar despues del tratamiento.
+  
+$work = \beta_0 + \gamma_0 post93 + \beta_1 kids + \gamma_1 (kids\times pos93) + \epsilon$
+  
+###f) Obtenga el estimador de DID a mano. Pista: Tenga en cuenta la resta de medias para ambos grupos (Tratamiento y control) en los periodos pre y post.
+
+$E [(〖Y_1〗_i |D=1)-(〖Y_0〗_i |D=1]-E [(〖Y_1〗_i |D=0)-(〖Y_0〗_i |D=0)]$
+$〖Y_1〗_i=$La persona tiene hijos
+
+  *$〖Y_0〗_i=$ La persona no tiene hijos
+  *$(〖Y_1〗_i│D=1)=$ La persona tiene hijos dado que hubo una extención de los impuestos 
+  *$(〖Y_1〗_i│D=o)=$ La persona tiene hijos dado que no hubo una extención de los impuestos
+  *$(〖Y_0〗_i│D=1)=$ La persona no tiene hijos dado que hubo una extención de los impuestos
+  *$(〖Y_0〗_i│D=0)=$ La persona no tiene hijos dado que nohubo una extención de los impuestos
+
+
+
+  
+###g) Obtenga el estimador de DID a trav?s de un modelo lineal. Compare sus resultados con el punto anterior y descr?balos.
+    
+```{r }
+  eitc3 <- eitc
+  eitc3$pos93 <- eitc3$year>=1994
+  eitc3$kids <- eitc3$children>=1
+  View(eitc3)
+  
+  model = lm(work ~ kids*pos93, data = eitc3)
+  stargazer(model, type = "text")
+
+```
